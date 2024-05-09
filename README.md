@@ -1,3 +1,261 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Models\Employee;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Validator;
+use Yajra\DataTables\Facades\DataTables;
+
+class EmployeeController extends Controller
+{
+    /**
+     * Display a listing of the resource.
+     */
+    public function employee()
+    {
+        return view('backend.employee');
+    }
+
+    /**
+     * Show the form for creating a new resource.
+     */
+    public function employeeList()
+    {
+        return view('backend.employeeList');
+    }
+
+    /**
+     * Store a newly created resource in storage.
+     */
+    public function store(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'name' => 'required',
+            'email' => 'required',
+            'phone' => 'required',
+        ]);
+        if ($validator->fails()) {
+            return back()->withErrors($validator)->withInput();
+        }
+        $data = Employee::create([
+            'name' => $request->name,
+            'email' => $request->email,
+            'phone' => $request->phone,
+        ]);
+
+        return redirect()->route('employee.view');
+    }
+
+    /**
+     * Display the specified resource.
+     */
+    public function employeegetdata(Request $request)
+    {
+        if ($request->ajax()) {
+            $data = Employee::select('*')->get();
+            return DataTables::of($data)
+                ->addColumn('action', function ($row) {
+                    $editButton = '<button class="btn btn-dark edit-btn btn-sm" data-row-id="' . $row->id . '" ><i class="fa-solid fa-pencil"></i></button>&nbsp;';
+                    $deleteButton = '<button class="btn btn-dark delete-btn btn-sm" data-row-id="' . $row->id . '" ><i class="fa-solid fa-delete-left"></i></button>&nbsp;';
+                    return $editButton . $deleteButton;
+                })
+
+                ->rawColumns(['action'])
+                ->make(true);
+        }
+    }
+
+    /**
+     * Show the form for editing the specified resource.
+     */
+    public function edit(string $id)
+    {
+        $user = employee::findOrfail($id);
+        if ($user) {
+            return view('backend.employee-edit', compact('user'));
+        } else {
+            return redirect()->back()->with('error', 'invalid id!');
+        }
+    }
+
+    /**
+     * Update the specified resource in storage.
+     */
+    public function update(Request $request, string $id)
+    {
+        $data = $request->all();
+        $user = employee::findOrfail($id);
+        $rule = [
+            'name' => 'required',
+            'email' => 'required',
+            'phone' => 'required',
+        ];
+        $validator = Validator::make($data, $rule);
+        if ($validator->fails()) {
+            return back()->withErrors($validator)->withInput();
+        }
+        $user->update($data);
+        return redirect()->route('employeeList')->with('success', 'Employee updated successfully');
+    }
+
+    /**
+     * Remove the specified resource from storage.
+     */
+    public function destroy(string $id)
+    {
+        $user = employee::find($id);
+        $user->delete();
+        return response()->json(['success' => 'employee delete successfully']);
+    }
+}
+@extends('backend.layouts.main')
+@section('title', 'MT : : Admin Profile')
+@section('content')
+    <div class="container-xxl flex-grow-1 container-p-y">
+        <div class="row">
+            <!-- Basic with Icons -->
+            <div class="col-xxl">
+                <div class="card mb-4">
+                    <div class="card-header d-flex align-items-center justify-content-between">
+                        <h5 class="mb-0">Admin Profile</h5>
+                        <small class="text-muted float-end">Merged input group</small>
+                    </div>
+                    <div class="card-body">
+                        <table class="table" id="employeetable">
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Email</th>
+                                    <th>Phone</th>
+                                    <th>action</th>
+                                </tr>
+                            </thead>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+@endsection
+
+@section('script')
+    <script src="https://cdn.datatables.net/1.10.19/js/jquery.dataTables.min.js"></script>
+    <script>
+        $(document).ready(function() {
+            $('#employeetable').DataTable({
+                processing: true,
+                serverSide: true,
+                ajax: '{{ route('employee.getdata') }}',
+                columns: [{
+                        data: 'name',
+                        name: 'name'
+                    },
+                    {
+                        data: 'email',
+                        name: 'email'
+                    },
+                    {
+                        data: 'phone',
+                        name: 'phone'
+                    }, {
+                        data: 'action',
+                        name: 'action',
+                        orderable: false,
+                        searchable: true
+                    }
+                ]
+            });
+
+            $(document).on('click', '.delete-btn', function(e) {
+                var deleteBtn = $(this);
+                var id = deleteBtn.data('row-id');
+                var r = confirm('Are you sure you want to delete?');
+                if (!r) {
+                    return false;
+                }
+                $.ajax({
+                    type: "POST",
+                    url: "/employee-delete/" + id,
+                    data: {
+                        _token: "{{ csrf_token() }}",
+                        _method: "DELETE"
+                    },
+                    success: function(resp) {
+                        if (resp.success) {
+                            $('#employeetable').DataTable().ajax.reload();
+                            $('.alert-success .msg-content').html(resp.message);
+                            $('.alert-success').show();
+                        } else {
+                            $('.alert-danger .msg-content').html(resp.message);
+                            $('.alert-danger').show();
+                        }
+                        deleteBtn.attr('disabled', false);
+                    },
+                    error: function(xhr, status, error) {
+                        alert('Error: ' + error);
+                        deleteBtn.attr('disabled', false);
+                    }
+                });
+            });
+
+            $("#employeetable").on('click', '.edit-btn', function() {
+                var editBtn = $(this);
+                var id = editBtn.data('row-id'); // Change to data('row-id')
+                window.location.href = "/employee-edit/" + id;
+            });
+
+
+        });
+    </script>
+@endsection
+<?php
+
+use App\Http\Controllers\AdmissionController;
+use App\Http\Controllers\EmployeeController;
+use App\Http\Controllers\TestController;
+use Illuminate\Support\Facades\Route;
+
+Route::get('/', function () {
+    return view('backend.dashboard');
+});
+
+
+// TEST
+Route::get('/testview', [TestController::class, 'testview'])->name('testview');
+Route::post('/test/store', [TestController::class, 'teststore'])->name('teststore');
+Route::post('/test/edit/{id}', [TestController::class, 'edit'])->name('edit');
+Route::put('/test/update/{id}', [TestController::class, 'update'])->name('update');
+Route::post('/test/{id}', [TestController::class, 'destroy'])->name('destroy');
+Route::get('/testview/getdata', [TestController::class, 'getData'])->name('getData');
+
+
+//ADMISSION
+Route::get('/addmission', [AdmissionController::class, 'index'])->name('admission');
+Route::post('/addmission/store', [AdmissionController::class, 'store'])->name('admission.store');
+Route::get('/addmission/getdata', [AdmissionController::class, 'getAdmissiondata'])->name('getAdmissiondata');
+Route::post('/addmission/{id}', [AdmissionController::class, 'destroy'])->name('admission.destroy');
+
+
+Route::get('/employee-add', [EmployeeController::class, 'employee'])->name('employee.view');
+
+Route::post('/employee-store', [EmployeeController::class, 'store'])->name('employee.store');
+Route::get('/employee-List', [EmployeeController::class, 'employeeList'])->name('employeeList');
+Route::get('/employee-getdata', [EmployeeController::class, 'employeegetdata'])->name('employee.getdata');
+Route::get('/employee-edit/{id}', [EmployeeController::class, 'edit'])->name('employee.edit');
+Route::put('/employee-update/{id}', [EmployeeController::class, 'update'])->name('employee.update');
+Route::delete('/employee-delete/{id}', [EmployeeController::class, 'destroy'])->name('employee.destroy');
+
+
+
+// LEAVING_CERTIFICATE
+defined('LEAVING_CERTIFICATE') or define('LEAVING_CERTIFICATE', public_path('/backend/admission/leaving_certificate'));
+
+//MEDICAL_REPORT
+defined('MEDICAL_REPORT') or define('MEDICAL_REPORT', public_path('/backend/admission/medical_report'));
+
+//REPORT_CARD
+defined('REPORT_CARD') or define('REPORT_CARD', public_path('/backend/admission/report_card'));
 @extends('backend.layouts.main')
 @section('title', 'MT : : Admin Profile')
 @section('content')
@@ -380,50 +638,63 @@ class TestController extends Controller
         return response()->json(['success' => 'delete sucessfully!!']);
     }
 }
-<?php
 
-use App\Http\Controllers\AdmissionController;
-use App\Http\Controllers\EmployeeController;
-use App\Http\Controllers\TestController;
-use Illuminate\Support\Facades\Route;
+@extends('backend.layouts.main')
+@section('title', 'MT : : Admin Profile')
+@section('content')
 
-Route::get('/', function () {
-    return view('backend.dashboard');
-});
+    <div class="container-xxl flex-grow-1 container-p-y">
 
+        <div class="row">
 
-// TEST
-Route::get('/testview', [TestController::class, 'testview'])->name('testview');
-Route::post('/test/store', [TestController::class, 'teststore'])->name('teststore');
-Route::post('/test/edit/{id}', [TestController::class, 'edit'])->name('edit');
-Route::put('/test/update/{id}', [TestController::class, 'update'])->name('update');
-Route::post('/test/{id}', [TestController::class, 'destroy'])->name('destroy');
-Route::get('/testview/getdata', [TestController::class, 'getData'])->name('getData');
+            <div class="col-xxl">
+                <div class="card mb-4">
+                    <div class="card-header d-flex align-items-center justify-content-between">
+                        <h5 class="mb-0">Admin Profile</h5>
+                        <small class="text-muted float-end">Merged input group</small>
+                    </div>
+                    <div class="card-body">
+                        <form id="profileForm" action="{{ route('employee.update', ['id' => $user->id]) }}" method="POST">
+                            @csrf
+                            @method('PUT')
+                            <div class="row mb-3">
+                                <input type="hidden" name="_method" value="PUT">
 
+                                <label class="col-sm-2 col-form-label" for="name">Name</label>
+                                <div class="col-sm-10">
+                                    <input type="text" class="form-control" name="name" id="name"
+                                        value="{{ $user->name }}" placeholder="John Doe" />
+                                </div>
+                            </div>
 
-//ADMISSION
-Route::get('/addmission', [AdmissionController::class, 'index'])->name('admission');
-Route::post('/addmission/store', [AdmissionController::class, 'store'])->name('admission.store');
-Route::get('/addmission/getdata', [AdmissionController::class, 'getAdmissiondata'])->name('getAdmissiondata');
-Route::post('/addmission/{id}', [AdmissionController::class, 'destroy'])->name('admission.destroy');
+                            <div class="row mb-3">
+                                <label class="col-sm-2 col-form-label" for="email">Email</label>
+                                <div class="col-sm-10">
+                                    <input type="text" id="email" class="form-control" name="email"
+                                        value="{{ $user->email }}" placeholder="john.doe@example.com" />
+                                </div>
+                            </div>
 
+                            <div class="row mb-3">
+                                <label class="col-sm-2 col-form-label" for="phone">Phone</label>
+                                <div class="col-sm-10">
+                                    <input type="text" class="form-control" name="phone" id="phone"
+                                        value="{{ $user->phone }}" placeholder="Phone Number" />
+                                </div>
+                            </div>
+                            <div class="row justify-content-end">
+                                <div class="col-sm-10">
+                                    <button type="submit" class="btn btn-primary">Update</button>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
 
-Route::get('/employee-add', [EmployeeController::class, 'employee'])->name('employee.view');
+        </div>
 
-Route::post('/employee-store', [EmployeeController::class, 'store'])->name('employee.store');
-Route::get('/employee-List', [EmployeeController::class, 'employeeList'])->name('employeeList');
-Route::get('/employee-getdata', [EmployeeController::class, 'employeegetdata'])->name('employee.getdata');
-Route::get('/employee-edit/{id}', [EmployeeController::class, 'edit'])->name('employee.edit');
-Route::put('/employee-update/{id}', [EmployeeController::class, 'update'])->name('employee.update');
-Route::delete('/employee-delete/{id}', [EmployeeController::class, 'destroy'])->name('employee.destroy');
+    </div>
 
+@endsection
 
-
-// LEAVING_CERTIFICATE
-defined('LEAVING_CERTIFICATE') or define('LEAVING_CERTIFICATE', public_path('/backend/admission/leaving_certificate'));
-
-//MEDICAL_REPORT
-defined('MEDICAL_REPORT') or define('MEDICAL_REPORT', public_path('/backend/admission/medical_report'));
-
-//REPORT_CARD
-defined('REPORT_CARD') or define('REPORT_CARD', public_path('/backend/admission/report_card'));
