@@ -1,3 +1,33 @@
+
+
+        if ($request->hasFile('avtar')) {
+            $file = $request->file('avtar');
+            if ($file->isValid()) {
+                $ext = strtolower($file->getClientOriginalExtension());
+                $filename = $client->id . '.' . $ext;
+                $targetPath = AVTAR_PATH;
+                $file->move($targetPath, $filename);
+                $client->avtar = $filename;
+                $client->save();
+            } else {
+                return redirect()->back()->with("avtar", "Uploaded image is not valid.");
+            }
+        }
+
+
+           return DataTables::of($clients)
+                ->addColumn('avtar', function ($row) {
+                    return '<img src="' . asset('/backend/avtar/' . $row->avtar) . '" border="2" width="90" class="img-rounded" align="center" />';
+                })
+
+
+                 {
+                        data: 'avtar',
+                        name: 'avtar',
+                        render: function(data, type, full, meta) {
+                            return data;
+                        }
+                    },
 <?php
 
 namespace App\Http\Controllers;
