@@ -1,3 +1,5 @@
+defined('AVTAR_PATH') or define('AVTAR_PATH', public_path('/backend/avtar'));
+defined('AVTAR_ROOT') or define('AVTAR_ROOT', asset('/backend/avtar') . '/');
 
 
         if ($request->hasFile('avtar')) {
